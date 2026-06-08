@@ -88,18 +88,19 @@ static bool image_grid_handle_click(MVView *view, MVUiEvent *event) {
 }
 
 
-void mv_image_grid_init(MVImageGrid *grid, int x, int y,
-                        int num_items, int columns,
-                        const int *image_ids,
-                        void (*item_selected)(MVImageGrid *self)) {
+void mv_image_grid_init_ex(MVImageGrid *grid, int x, int y,
+                           int num_items, int columns,
+                           const int *image_ids,
+                           void (*item_selected)(MVImageGrid *self),
+                           int fg_color, int bg_color, bool is_visible) {
     int rows = (num_items + columns - 1) / columns;
 
     grid->num_items = num_items;
     grid->columns = columns;
     grid->item_width = MV_IMAGE_GRID_ITEM_WIDTH;
     grid->item_height = MV_IMAGE_GRID_ITEM_HEIGHT;
-    grid->fg_color = MV_IMAGE_GRID_DEFAULT_FG;
-    grid->bg_color = MV_IMAGE_GRID_DEFAULT_BG;
+    grid->fg_color = fg_color;
+    grid->bg_color = bg_color;
     grid->image_ids = image_ids;
     grid->selected = 0;
     grid->item_selected = item_selected;
@@ -108,7 +109,7 @@ void mv_image_grid_init(MVImageGrid *grid, int x, int y,
     grid->view.y = y;
     grid->view.width = columns * button_width(grid);
     grid->view.height = rows * button_height(grid);
-    grid->view.is_visible = true;
+    grid->view.is_visible = is_visible;
     grid->view.draw = image_grid_draw;
     grid->view.handle_click = image_grid_handle_click;
 

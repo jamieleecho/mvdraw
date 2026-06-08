@@ -107,63 +107,41 @@ def tool_line():
 
 
 # --------------------------------------------------------------------------- #
-# pattern swatches (representations of cgfx PAT_*)
+# pattern swatches -- the actual cgfx GRP_PAT2 fills.
+#
+# These are the exact 8x8 tiles from NitrOS-9 sys/stdpats_2.asm (the data the
+# GrfDrv loads for the standard 2-color patterns). Each row is one byte, MSB =
+# leftmost pixel, a set bit = ink. We tile them full-bleed across the 24x24
+# button so the swatch matches what _cgfx_pset(GRP_PAT2, n) actually paints.
+# pat0 is solid (the default, not stored in stdpats_2).
 # --------------------------------------------------------------------------- #
-PAT_BOX = (3, 3, 20, 20)   # inclusive pixel area to fill with the pattern
+PAT_TILES = [
+    ("pat0.png", [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),  # SLD  solid
+    ("pat1.png", [0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55]),  # DOT  dots
+    ("pat2.png", [0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88]),  # VRT  vertical
+    ("pat3.png", [0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00]),  # HRZ  horizontal
+    ("pat4.png", [0xFF, 0x88, 0xFF, 0x88, 0xFF, 0x88, 0xFF, 0x88]),  # XHTC crosshatch
+    ("pat5.png", [0x44, 0x88, 0x11, 0x22, 0x44, 0x88, 0x11, 0x22]),  # LSNT left slant
+    ("pat6.png", [0x22, 0x11, 0x88, 0x44, 0x22, 0x11, 0x88, 0x44]),  # RSNT right slant
+    ("pat7.png", [0x88, 0x00, 0x22, 0x00, 0x88, 0x00, 0x22, 0x00]),  # SDOT small dots
+    ("pat8.png", [0x66, 0x99, 0x99, 0x66, 0x66, 0x99, 0x99, 0x66]),  # BDOT large dots
+]
 
-def fill_pattern(d, fn):
-    x0, y0, x1, y1 = PAT_BOX
-    for y in range(y0, y1 + 1):
-        for x in range(x0, x1 + 1):
-            if fn(x - x0, y - y0):
+# White margin left around each pattern swatch, in pixels.
+PAT_MARGIN = 2
+
+def save_pattern(name, rows):
+    img, d = new_btn()
+    for y in range(PAT_MARGIN, N - PAT_MARGIN):
+        bits = rows[y % 8]
+        for x in range(PAT_MARGIN, N - PAT_MARGIN):
+            if bits & (0x80 >> (x % 8)):
                 d.point((x, y), fill=BLACK)
+    save_btn(img, name)
 
-def pat_solid():
-    img, d = new_btn()
-    d.rectangle(PAT_BOX, fill=BLACK)
-    border(d)
-    save_btn(img, "pat0.png")
-
-def pat_dot():
-    img, d = new_btn()
-    fill_pattern(d, lambda x, y: (x % 3 == 0) and (y % 3 == 0))
-    border(d); save_btn(img, "pat1.png")
-
-def pat_vrt():
-    img, d = new_btn()
-    fill_pattern(d, lambda x, y: x % 3 == 0)
-    border(d); save_btn(img, "pat2.png")
-
-def pat_hrz():
-    img, d = new_btn()
-    fill_pattern(d, lambda x, y: y % 3 == 0)
-    border(d); save_btn(img, "pat3.png")
-
-def pat_xhtc():
-    img, d = new_btn()
-    fill_pattern(d, lambda x, y: (x % 4 == 0) or (y % 4 == 0))
-    border(d); save_btn(img, "pat4.png")
-
-def pat_lsnt():
-    img, d = new_btn()
-    fill_pattern(d, lambda x, y: (x + y) % 4 == 0)
-    border(d); save_btn(img, "pat5.png")
-
-def pat_rsnt():
-    img, d = new_btn()
-    fill_pattern(d, lambda x, y: (x - y) % 4 == 0)
-    border(d); save_btn(img, "pat6.png")
-
-def pat_sdot():
-    img, d = new_btn()
-    fill_pattern(d, lambda x, y: (x % 4 == 1) and (y % 4 == 1))
-    border(d); save_btn(img, "pat7.png")
-
-def pat_bdot():
-    img, d = new_btn()
-    # 2x2 dots on a 5-pixel grid
-    fill_pattern(d, lambda x, y: (x % 5 in (0, 1)) and (y % 5 in (0, 1)))
-    border(d); save_btn(img, "pat8.png")
+def patterns():
+    for name, rows in PAT_TILES:
+        save_pattern(name, rows)
 
 
 # --------------------------------------------------------------------------- #
@@ -234,8 +212,7 @@ def app_icon():
 
 def main():
     tool_select(); tool_rect(); tool_frect(); tool_circle(); tool_ellipse(); tool_line()
-    pat_solid(); pat_dot(); pat_vrt(); pat_hrz(); pat_xhtc()
-    pat_lsnt(); pat_rsnt(); pat_sdot(); pat_bdot()
+    patterns()
     col_black(); col_white()
     logic_none(); logic_and(); logic_or(); logic_xor()
     app_icon()

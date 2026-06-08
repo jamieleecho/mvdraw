@@ -23,6 +23,26 @@ static int clampi(int v, int lo, int hi) {
     return v;
 }
 
+/* floor(sqrt(n)) by the bit-by-bit method -- no division, no float. n is a
+   32-bit value; the result fits an int (a canvas diagonal is < 600). */
+static int isqrt32(unsigned long n) {
+    unsigned long bit = 0x40000000UL;   /* largest power of 4 <= 2^31 */
+    unsigned long root = 0;
+    while (bit > n) {
+        bit >>= 2;
+    }
+    while (bit) {
+        if (n >= root + bit) {
+            n -= root + bit;
+            root = (root >> 1) + bit;
+        } else {
+            root >>= 1;
+        }
+        bit >>= 2;
+    }
+    return (int)root;
+}
+
 /* Clamp a screen point to the view's content rectangle. */
 static void clamp_to_view(const DrawView *v, int *x, int *y) {
     *x = clampi(*x, v->view.x, v->view.x + v->view.width - 1);
@@ -50,7 +70,7 @@ static void stroke_geometry(int type, int x0, int y0, int x1, int y1) {
         case SHAPE_CIRCLE:
             cx = (x0 + x1) / 2;
             cy = (y0 + y1) / 2;
-            r = imin(iabs(x1 - x0), iabs(y1 - y0)) / 2;
+            r = imin(iabs(x1 - x0), iabs(y1 - y0));
             _cgfx_setdptr(MV_OUTPATH, cx, cy);
             _cgfx_circle(MV_OUTPATH, r);
             break;
@@ -65,8 +85,6 @@ static void stroke_geometry(int type, int x0, int y0, int x1, int y1) {
         case SHAPE_LINE:
             _cgfx_setdptr(MV_OUTPATH, x0, y0);
             _cgfx_line(MV_OUTPATH, x1, y1);
-            break;
-        default:
             break;
     }
 }
@@ -162,12 +180,52 @@ static int hit_handle(const DrawView *v, int sx, int sy) {
     return -1;
 }
 
-/* Returns the top-most shape whose bounding box (plus margin) contains canvas
-   point (cx,cy), or -1. */
+/* True if canvas point (cx,cy) is within `tol` pixels of the line *segment*
+   (x0,y0)-(x1,y1) -- a thin band hugging the line, not its bounding box.
+
+   All intermediates are 32-bit: a cross product reaches ~|dx|*|dy| (~87k on
+   this canvas), which overflows 16-bit. We avoid the squared-distance compare
+   (cross*cross would overflow even 32-bit) by taking an integer sqrt of the
+   length and comparing |cross| <= tol*len directly. */
+static bool hit_line(const Shape *s, int cx, int cy, int tol) {
+    long dx = (long)s->x1 - s->x0;
+    long dy = (long)s->y1 - s->y0;
+    long len2 = dx * dx + dy * dy;
+    long t, cross;
+
+    if (len2 == 0) {                    /* degenerate line == point */
+        return iabs(cx - s->x0) <= tol && iabs(cy - s->y0) <= tol;
+    }
+
+    /* Reject points off the ends: the projection of (P-A) onto (B-A) must land
+       within [0, len2], so the band has square caps at the endpoints. */
+    t = (long)(cx - s->x0) * dx + (long)(cy - s->y0) * dy;
+    if (t < 0 || t > len2) {
+        return false;
+    }
+
+    /* Perpendicular distance from the line is |cross|/len; within tol when
+       |cross| <= tol*len. */
+    cross = (long)(cx - s->x0) * dy - (long)(cy - s->y0) * dx;
+    if (cross < 0) {
+        cross = -cross;
+    }
+    return cross <= (long)tol * isqrt32((unsigned long)len2);
+}
+
+/* Returns the top-most shape hit by canvas point (cx,cy), or -1. Lines use a
+   thin band along the segment; other shapes use their bounding box plus a
+   margin. */
 static int hit_shape(const DrawView *v, int cx, int cy) {
     int i;
     for (i = v->drawing->num_shapes - 1; i >= 0; --i) {
         const Shape *s = &v->drawing->shapes[i];
+        if (s->type == SHAPE_LINE) {
+            if (hit_line(s, cx, cy, SHAPE_TOL)) {
+                return i;
+            }
+            continue;
+        }
         int lo_x = imin(s->x0, s->x1) - SHAPE_TOL;
         int hi_x = imax(s->x0, s->x1) + SHAPE_TOL;
         int lo_y = imin(s->y0, s->y1) - SHAPE_TOL;
@@ -268,9 +326,11 @@ static bool create_drag(DrawView *v, MSRET *mp, int ax, int ay) {
         if (v->on_add) {
             v->on_add(v, idx);
         }
+        /* The existing shapes are untouched (the XOR preview erased itself) and
+           the new shape is topmost, so just paint it -- no full repaint. */
+        render_shape(v, &v->drawing->shapes[idx]);
+        Flush();
     }
-
-    draw_view_draw(&v->view);
     return true;
 }
 
@@ -427,7 +487,7 @@ void draw_view_init(DrawView *v, int x, int y, int width, int height,
     v->view.handle_click = draw_view_handle_click;
 
     v->drawing = drawing;
-    v->tool = TOOL_RECT;
+    v->tool = TOOL_SELECT;
     v->pattern = PAT_SLD;
     v->color = 0;            /* black ink */
     v->logic = LOG_NONE;

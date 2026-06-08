@@ -139,3 +139,32 @@ void drawing_undo_restore(void *record) {
         e->drawing->shapes[e->index] = e->old;
     }
 }
+
+
+void *drawing_delete_shape(Drawing *drawing, int index) {
+    if ((index < 0) || (index >= drawing->num_shapes)) {
+        return (void *)0;
+    }
+    /* Snapshot for undo before mutating. */
+    void *record = drawing_record_edit(drawing, index, &drawing->shapes[index]);
+    for (int ii = index; ii < drawing->num_shapes - 1; ++ii) {
+        drawing->shapes[ii] = drawing->shapes[ii + 1];
+    }
+    --drawing->num_shapes;
+    return record;
+}
+
+
+void drawing_undo_reinsert(void *record) {
+    ShapeEdit *e = (ShapeEdit *)record;
+    Drawing *d = e->drawing;
+    if ((d->num_shapes >= DRAW_MAX_SHAPES) ||
+        (e->index < 0) || (e->index > d->num_shapes)) {
+        return;
+    }
+    for (int ii = d->num_shapes; ii > e->index; --ii) {
+        d->shapes[ii] = d->shapes[ii - 1];
+    }
+    d->shapes[e->index] = e->old;
+    ++d->num_shapes;
+}

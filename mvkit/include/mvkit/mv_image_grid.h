@@ -43,11 +43,11 @@ typedef struct MVImageGrid {
 } MVImageGrid;
 
 /**
- * @brief Initialize a grid and draw it immediately.
+ * @brief Initialize a grid (with explicit colors/visibility) and draw it.
  *
- * Item size defaults to #MV_IMAGE_GRID_ITEM_WIDTH x #MV_IMAGE_GRID_ITEM_HEIGHT
- * and colors to #MV_IMAGE_GRID_DEFAULT_FG / #MV_IMAGE_GRID_DEFAULT_BG (set the
- * fields afterward to override); the view frame is computed from the layout.
+ * Item size defaults to #MV_IMAGE_GRID_ITEM_WIDTH x #MV_IMAGE_GRID_ITEM_HEIGHT;
+ * the view frame is computed from the layout. The #mv_image_grid_init macro
+ * calls this with the default colors and is_visible = true.
  *
  * @param grid          the grid to initialize.
  * @param x             left edge, screen coords.
@@ -56,11 +56,28 @@ typedef struct MVImageGrid {
  * @param columns       buttons per row.
  * @param image_ids     num_items image-buffer ids (borrowed; must outlive the grid).
  * @param item_selected called when the selection changes (may be NULL).
+ * @param fg_color      button border / highlight color.
+ * @param bg_color      background fill color.
+ * @param is_visible    true to draw the images, false to draw only the background.
  */
-extern void mv_image_grid_init(MVImageGrid *grid, int x, int y,
-                               int num_items, int columns,
-                               const int *image_ids,
-                               void (*item_selected)(MVImageGrid *self));
+extern void mv_image_grid_init_ex(MVImageGrid *grid, int x, int y,
+                                  int num_items, int columns,
+                                  const int *image_ids,
+                                  void (*item_selected)(MVImageGrid *self),
+                                  int fg_color, int bg_color, bool is_visible);
+
+/**
+ * @brief Initialize a grid with the default colors, visible, and draw it.
+ *
+ * Convenience wrapper over #mv_image_grid_init_ex using
+ * #MV_IMAGE_GRID_DEFAULT_FG / #MV_IMAGE_GRID_DEFAULT_BG and is_visible = true.
+ * Same arguments as the original init; set the color fields afterward, or call
+ * mv_image_grid_init_ex(), to override.
+ */
+#define mv_image_grid_init(grid, x, y, num_items, columns, image_ids, item_selected) \
+    mv_image_grid_init_ex((grid), (x), (y), (num_items), (columns),                  \
+                          (image_ids), (item_selected),                              \
+                          MV_IMAGE_GRID_DEFAULT_FG, MV_IMAGE_GRID_DEFAULT_BG, 1)
 
 /**
  * @brief Index of the currently selected item.

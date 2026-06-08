@@ -57,6 +57,11 @@ extern error_code drawing_save(const Drawing *drawing, const char *filename);
 /* Append shape; returns its index, or -1 if the drawing is full. */
 extern int drawing_add_shape(Drawing *drawing, const Shape *shape);
 
+/* Delete the shape at `index`, shifting later shapes down. Snapshots the removed
+   shape for undo and returns an opaque record pointer for an MVUndoItem (paired
+   with drawing_undo_reinsert), or NULL if `index` is out of range. */
+extern void *drawing_delete_shape(Drawing *drawing, int index);
+
 extern int drawing_count(const Drawing *drawing);
 
 
@@ -73,5 +78,9 @@ extern void *drawing_record_edit(Drawing *drawing, int index, const Shape *old);
 /* Undo for a "resize/move": restores the geometry captured by the matching
    drawing_record_edit(). object == that record pointer. */
 extern void drawing_undo_restore(void *record);
+
+/* Undo for a "delete": re-inserts the removed shape at its original index
+   (shifting later shapes up). object == the drawing_delete_shape() record. */
+extern void drawing_undo_reinsert(void *record);
 
 #endif /* _DRAWING_H_ */

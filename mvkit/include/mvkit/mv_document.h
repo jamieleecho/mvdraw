@@ -115,6 +115,21 @@ extern error_code mv_document_save_as(MVDocument *doc);
 extern error_code mv_document_save(MVDocument *doc);
 
 /**
+ * @brief Decide whether the document may be closed, prompting to save if dirty.
+ *
+ * If the document has unsaved changes, asks "Save changes before closing?".
+ * On Yes it saves; if that save fails or is cancelled the document stays open.
+ * On No the changes are abandoned. A clean document closes without prompting.
+ *
+ * The caller is responsible for the actual teardown/exit -- this only reports
+ * whether it should proceed. Use it for the close box (MN_CLOS) and File/Exit.
+ *
+ * @param doc the document.
+ * @return true if the caller may proceed to close; false to stay open.
+ */
+extern bool mv_document_close(MVDocument *doc);
+
+/**
  * @brief Record a model change and its corresponding undo action.
  *
  * The action is pushed onto the document's undo manager and the document is

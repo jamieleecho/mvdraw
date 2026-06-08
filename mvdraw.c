@@ -55,18 +55,18 @@ static const MVTheme theme = { {
 #define LOGIC_Y     (TOOLS_Y + TOOLS_ROWS * BTN + 3)
 #define LOGIC_COLS  2
 
-#define COLOR_X     2
-#define COLOR_Y     (LOGIC_Y + 2 * BTN + 3)
+#define COLOR_X     (TOOLS_X + LOGIC_COLS * BTN + 6)
+#define COLOR_Y     (184 - BTN - 1)        /* a single row along the bottom */
 #define COLOR_COLS  2
 
-#define PAT_X       (TOOLS_X + TOOLS_COLS * BTN + 6)
-#define PAT_Y       2
+#define PAT_X       (COLOR_X + COLOR_COLS * BTN + 6)
+#define PAT_Y       (184 - BTN - 1)        /* a single row along the bottom */
 #define PAT_COLS    9
 
-#define CANVAS_X    PAT_X
-#define CANVAS_Y    (PAT_Y + BTN + 4)
+#define CANVAS_X    COLOR_X
+#define CANVAS_Y    2
 #define CANVAS_W    (624 - CANVAS_X)
-#define CANVAS_H    (184 - CANVAS_Y)
+#define CANVAS_H    (PAT_Y - 4 - CANVAS_Y)
 
 
 /* ---- counts and image buffers ------------------------------------------- */
@@ -109,10 +109,12 @@ static MIDSCR file_menu_items[] = {
     MV_MENU_ITEM("Exit"),
 };
 
-typedef enum { EditMenuIndex_Undo = 0 } EditMenuIndex;
+typedef enum { EditMenuIndex_Undo = 0, EditMenuIndex_Delete = 2 } EditMenuIndex;
 
 static MIDSCR edit_menu_items[] = {
     MV_MENU_ITEM("Undo"),
+    MV_MENU_SEPARATOR,
+    MV_MENU_ITEM("Delete"),
 };
 
 static MIDSCR help_menu_items[] = {
@@ -130,11 +132,7 @@ mv_set_menus(mywindow, "mvdraw", menus);
 /* ---- menu actions ------------------------------------------------------- */
 
 static void exit_action(MSRET *msinfo, int menuid, int itemno) {
-    if (mv_document_is_dirty(&doc)) {
-        if (mv_document_save(&doc) == 0) {
-            exit(0);
-        }
-    } else {
+    if (mv_document_close(&doc)) {
         exit(0);
     }
 }
@@ -162,13 +160,27 @@ static void save_as_action(MSRET *msinfo, int menuid, int itemno) {
 }
 
 static void about_action(MSRET *msinfo, int menuid, int itemno) {
-    mv_app_show_message_box("mvdraw v" APP_VERSION "\r\nVector drawing for Multi-Vue",
+    mv_app_show_message_box("mvdraw v" APP_VERSION "\r(C) 2026 Jamie Cho",
                             MVMessageBoxType_Info);
 }
 
 static void undo_action(MSRET *msinfo, int menuid, int itemno) {
     if (mv_document_undo(&doc)) {
         draw_view_refresh(&canvas);
+    }
+}
+
+static void delete_action(MSRET *msinfo, int menuid, int itemno) {
+    int idx = canvas.selected;
+    if (idx >= 0 && idx < drawing_count(&drawing)) {
+        void *record = drawing_delete_shape(&drawing, idx);
+        canvas.selected = -1;
+        if (record) {
+            MVUndoItem item = { drawing_undo_reinsert, record };
+            mv_document_make_change(&doc, &item);
+        }
+        draw_view_refresh(&canvas);
+        mv_app_refresh_menubar();   /* Delete is now disabled (nothing selected) */
     }
 }
 
@@ -180,6 +192,7 @@ static MVMenuItemAction menu_actions[] = {
     {MN_FILE, 5, save_as_action},
     {MN_FILE, 7, exit_action},
     {MN_EDIT, 1, undo_action},
+    {MN_EDIT, 3, delete_action},
     {MN_HELP, 1, about_action},
     MV_MENU_ACTION_END
 };
@@ -193,7 +206,7 @@ static void tools_selected(MVImageGrid *g) {
 
 static void patterns_selected(MVImageGrid *g) {
     /* grid index 0..8 == cgfx PAT_SLD..PAT_BDOT */
-    draw_view_set_pattern(&canvas, mv_image_grid_selected(g));
+    draw_view_set_pattern(&canvas, (unsigned char)mv_image_grid_selected(g));
 }
 
 static void colors_selected(MVImageGrid *g) {
@@ -236,7 +249,10 @@ static void handle_click_event(MVUiEvent *event) {
     if (mv_view_dispatch_click(&patterns_grid.view, event)) return;
     if (mv_view_dispatch_click(&colors_grid.view, event)) return;
     if (mv_view_dispatch_click(&logic_grid.view, event)) return;
+    /* A canvas click can change the selection, so refresh the menu bar to keep
+       Edit > Delete's enabled state in sync. */
     mv_view_dispatch_click(&canvas.view, event);
+    mv_app_refresh_menubar();
 }
 
 static void mvdraw_action(MVUiEvent *event) {
@@ -308,41 +324,28 @@ static void mvdraw_pre_init(int argc, char **argv) {
     }
 }
 
-/* Override an image grid's colors for the white-on-paper look (black border /
-   highlight over white button backgrounds) and redraw. */
-static void style_grid(MVImageGrid *g) {
-    g->fg_color = COLOR_BLACK;
-    g->bg_color = COLOR_WHITE;
-    mv_image_grid_set_visible(g, true);
-}
-
 static void mvdraw_init(void) {
     assert(strncmp(file_menu_items[FileMenuIndex_Save]._mittl, "Save", 5) == 0);
     assert(strncmp(edit_menu_items[EditMenuIndex_Undo]._mittl, "Undo", 5) == 0);
 
-    _cgfx_bcolor(MV_OUTPATH, WINDOW_BACKGROUND);
-    _cgfx_clear(MV_OUTPATH);
-
-    mv_image_grid_init(&tools_grid, TOOLS_X, TOOLS_Y, NUM_TOOLS, TOOLS_COLS,
-                       tool_ids, tools_selected);
-    mv_image_grid_init(&patterns_grid, PAT_X, PAT_Y, NUM_PATTERNS, PAT_COLS,
-                       pat_ids, patterns_selected);
-    mv_image_grid_init(&colors_grid, COLOR_X, COLOR_Y, NUM_COLORS, COLOR_COLS,
-                       color_ids, colors_selected);
-    mv_image_grid_init(&logic_grid, LOGIC_X, LOGIC_Y, NUM_LOGICS, LOGIC_COLS,
-                       logic_ids, logic_selected);
-    style_grid(&tools_grid);
-    style_grid(&patterns_grid);
-    style_grid(&colors_grid);
-    style_grid(&logic_grid);
+    /* black border/highlight over white button backgrounds, for the
+       white-on-paper look. */
+    mv_image_grid_init_ex(&tools_grid, TOOLS_X, TOOLS_Y, NUM_TOOLS, TOOLS_COLS,
+                          tool_ids, tools_selected, COLOR_BLACK, COLOR_WHITE, true);
+    mv_image_grid_init_ex(&patterns_grid, PAT_X, PAT_Y, NUM_PATTERNS, PAT_COLS,
+                          pat_ids, patterns_selected, COLOR_BLACK, COLOR_WHITE, true);
+    mv_image_grid_init_ex(&colors_grid, COLOR_X, COLOR_Y, NUM_COLORS, COLOR_COLS,
+                          color_ids, colors_selected, COLOR_BLACK, COLOR_WHITE, true);
+    mv_image_grid_init_ex(&logic_grid, LOGIC_X, LOGIC_Y, NUM_LOGICS, LOGIC_COLS,
+                          logic_ids, logic_selected, COLOR_BLACK, COLOR_WHITE, true);
 
     draw_view_init(&canvas, CANVAS_X, CANVAS_Y, CANVAS_W, CANVAS_H, &drawing);
     canvas.on_add = canvas_on_add;
     canvas.on_edit = canvas_on_edit;
     draw_view_refresh(&canvas);
 
-    /* default to the Rectangle tool (fires tools_selected) */
-    mv_image_grid_select(&tools_grid, TOOL_RECT);
+    /* The Select (pointer) tool is the default: the tools grid starts with
+       item 0 selected/highlighted, and draw_view_init defaults to TOOL_SELECT. */
 
     Flush();
 }
@@ -352,6 +355,9 @@ static void mvdraw_refresh_menus_action(void) {
                              mv_document_is_dirty(&doc));
     mv_menu_item_set_enabled(edit_menu_items, EditMenuIndex_Undo,
                              mv_document_can_undo(&doc));
+    mv_menu_item_set_enabled(edit_menu_items, EditMenuIndex_Delete,
+                             canvas.selected >= 0 &&
+                             canvas.selected < drawing_count(&drawing));
 }
 
 int main(int argc, char **argv) {
