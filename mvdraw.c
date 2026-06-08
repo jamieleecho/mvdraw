@@ -193,7 +193,7 @@ static void tools_selected(MVImageGrid *g) {
 
 static void patterns_selected(MVImageGrid *g) {
     /* grid index 0..8 == cgfx PAT_SLD..PAT_BDOT */
-    draw_view_set_pattern(&canvas, (unsigned char)mv_image_grid_selected(g));
+    draw_view_set_pattern(&canvas, mv_image_grid_selected(g));
 }
 
 static void colors_selected(MVImageGrid *g) {

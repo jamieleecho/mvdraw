@@ -77,9 +77,11 @@ static void render_shape(const DrawView *v, const Shape *s) {
     int x1 = s->x1 + v->view.x, y1 = s->y1 + v->view.y;
 
     _cgfx_lset(MV_OUTPATH, s->logic);
-    _cgfx_bcolor(MV_OUTPATH, s->color);
-    _cgfx_fcolor(MV_OUTPATH, s->color);
+    _cgfx_fcolor(MV_OUTPATH, s->color);     /* ink for the pattern's set bits */
+    _cgfx_bcolor(MV_OUTPATH, v->paper);     /* paper shows through the gaps */
+    _cgfx_pset(MV_OUTPATH, s->pattern ? GRP_PAT2 : 0, s->pattern);
     stroke_geometry((int)s->type, x0, y0, x1, y1);
+    _cgfx_pset(MV_OUTPATH, 0, PAT_SLD);   /* leave solid for paper/handles */
     _cgfx_lset(MV_OUTPATH, LOG_NONE);
 }
 
