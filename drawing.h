@@ -62,6 +62,13 @@ extern int drawing_add_shape(Drawing *drawing, const Shape *shape);
    with drawing_undo_reinsert), or NULL if `index` is out of range. */
 extern void *drawing_delete_shape(Drawing *drawing, int index);
 
+/* Move the shape at `from` to index `to` (z-order: index 0 is drawn first /
+   bottom, the last index is drawn last / top), shifting the shapes in between.
+   `to` is clamped to [0, count-1]. Records the inverse for undo and returns an
+   opaque record pointer for an MVUndoItem (paired with drawing_undo_move), or
+   NULL if nothing moved (out of range or already at `to`). */
+extern void *drawing_move_shape(Drawing *drawing, int from, int to);
+
 extern int drawing_count(const Drawing *drawing);
 
 
@@ -82,5 +89,9 @@ extern void drawing_undo_restore(void *record);
 /* Undo for a "delete": re-inserts the removed shape at its original index
    (shifting later shapes up). object == the drawing_delete_shape() record. */
 extern void drawing_undo_reinsert(void *record);
+
+/* Undo for a z-order "move": moves the shape back to where it started.
+   object == the drawing_move_shape() record. */
+extern void drawing_undo_move(void *record);
 
 #endif /* _DRAWING_H_ */

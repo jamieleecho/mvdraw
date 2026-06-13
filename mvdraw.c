@@ -22,8 +22,9 @@
  */
 
 /* App-chosen menu ids (cgfx reserves the low numbers; MN_FILE/MN_EDIT/MN_STYL
-   are predefined, MN_HELP is ours). */
-#define MN_HELP 30
+   are predefined, MN_ARRANGE/MN_HELP are ours). */
+#define MN_ARRANGE 31
+#define MN_HELP    30
 
 /* Two-color (type 5) theme. Only palette registers 0 and 1 are displayed at
    1bpp; cowin/dialog chrome that references regs 2-3 collapses to bit0, so even
@@ -55,18 +56,27 @@ static const MVTheme theme = { {
 #define LOGIC_Y     (TOOLS_Y + TOOLS_ROWS * BTN + 3)
 #define LOGIC_COLS  2
 
-#define COLOR_X     (TOOLS_X + LOGIC_COLS * BTN + 6)
+/* The draw area is clipped with _cgfx_cwarea(), whose coordinates are 8x8
+   character cells, so the canvas must sit on character boundaries: its origin
+   and size are all multiples of CELL. The CANVAS_C* cell coords feed cwarea. */
+#define CELL         8
+#define CANVAS_CCOL  8                       /* char column -> x = 64 */
+#define CANVAS_CROW  1                       /* char row    -> y = 8  */
+#define CANVAS_CCW   70                      /* width  in cells -> 560 px */
+#define CANVAS_CCH   18                      /* height in cells -> 144 px */
+
+#define CANVAS_X    (CANVAS_CCOL * CELL)     /* 64  */
+#define CANVAS_Y    (CANVAS_CROW * CELL)     /* 8   */
+#define CANVAS_W    (CANVAS_CCW * CELL)      /* 560 (right edge 624) */
+#define CANVAS_H    (CANVAS_CCH * CELL)      /* 144 (bottom edge 152) */
+
+#define COLOR_X     CANVAS_X
 #define COLOR_Y     (184 - BTN - 1)        /* a single row along the bottom */
 #define COLOR_COLS  2
 
 #define PAT_X       (COLOR_X + COLOR_COLS * BTN + 6)
 #define PAT_Y       (184 - BTN - 1)        /* a single row along the bottom */
 #define PAT_COLS    9
-
-#define CANVAS_X    COLOR_X
-#define CANVAS_Y    2
-#define CANVAS_W    (624 - CANVAS_X)
-#define CANVAS_H    (PAT_Y - 4 - CANVAS_Y)
 
 
 /* ---- counts and image buffers ------------------------------------------- */
@@ -117,6 +127,21 @@ static MIDSCR edit_menu_items[] = {
     MV_MENU_ITEM("Delete"),
 };
 
+typedef enum {
+    ArrangeMenuIndex_BringToFront = 0,
+    ArrangeMenuIndex_MoveForward,
+    ArrangeMenuIndex_SendBackward,
+    ArrangeMenuIndex_SendToBack,
+    ArrangeMenuIndex_Count
+} ArrangeMenuIndex;
+
+static MIDSCR arrange_menu_items[] = {
+    MV_MENU_ITEM("Bring to Front"),
+    MV_MENU_ITEM("Move Forward"),
+    MV_MENU_ITEM("Send Backward"),
+    MV_MENU_ITEM("Send to Back"),
+};
+
 static MIDSCR help_menu_items[] = {
     MV_MENU_ITEM("About..."),
 };
@@ -124,6 +149,7 @@ static MIDSCR help_menu_items[] = {
 static MNDSCR menus[] = {
     MV_MENU("File", MN_FILE, file_menu_items),
     MV_MENU("Edit", MN_EDIT, edit_menu_items),
+    MV_MENU_SIZED("Arrange", MN_ARRANGE, 15, arrange_menu_items),
     MV_MENU("Help", MN_HELP, help_menu_items),
 };
 
@@ -184,6 +210,50 @@ static void delete_action(MSRET *msinfo, int menuid, int itemno) {
     }
 }
 
+/* Move the selected shape to z-order index `to` (clamped), keep it selected,
+   and record the change for undo. Shared by the four Arrange items. */
+static void arrange(int to) {
+    int idx = canvas.selected;
+    int n = drawing_count(&drawing);
+    if (idx < 0 || idx >= n) {
+        return;
+    }
+    if (to < 0) {
+        to = 0;
+    }
+    if (to > n - 1) {
+        to = n - 1;
+    }
+    if (to == idx) {
+        return;   /* already there */
+    }
+    {
+        void *record = drawing_move_shape(&drawing, idx, to);
+        if (record) {
+            canvas.selected = to;
+            MVUndoItem item = { drawing_undo_move, record };
+            mv_document_make_change(&doc, &item);
+            draw_view_refresh(&canvas);
+        }
+    }
+}
+
+static void bring_to_front_action(MSRET *msinfo, int menuid, int itemno) {
+    arrange(drawing_count(&drawing) - 1);
+}
+
+static void move_forward_action(MSRET *msinfo, int menuid, int itemno) {
+    arrange(canvas.selected + 1);
+}
+
+static void send_backward_action(MSRET *msinfo, int menuid, int itemno) {
+    arrange(canvas.selected - 1);
+}
+
+static void send_to_back_action(MSRET *msinfo, int menuid, int itemno) {
+    arrange(0);
+}
+
 static MVMenuItemAction menu_actions[] = {
     {MN_CLOS, 1, exit_action},
     {MN_FILE, 1, new_action},
@@ -193,6 +263,10 @@ static MVMenuItemAction menu_actions[] = {
     {MN_FILE, 7, exit_action},
     {MN_EDIT, 1, undo_action},
     {MN_EDIT, 3, delete_action},
+    {MN_ARRANGE, 1, bring_to_front_action},
+    {MN_ARRANGE, 2, move_forward_action},
+    {MN_ARRANGE, 3, send_backward_action},
+    {MN_ARRANGE, 4, send_to_back_action},
     {MN_HELP, 1, about_action},
     MV_MENU_ACTION_END
 };
@@ -328,6 +402,10 @@ static void mvdraw_init(void) {
     assert(strncmp(file_menu_items[FileMenuIndex_Save]._mittl, "Save", 5) == 0);
     assert(strncmp(edit_menu_items[EditMenuIndex_Undo]._mittl, "Undo", 5) == 0);
 
+    /* Scaling off so 1 unit == 1 pixel; required for the canvas's _cgfx_cwarea
+       clip (in 8x8 character cells) to line up with absolute coordinates. */
+    _cgfx_scalesw(MV_OUTPATH, false);
+
     /* black border/highlight over white button backgrounds, for the
        white-on-paper look. */
     mv_image_grid_init_ex(&tools_grid, TOOLS_X, TOOLS_Y, NUM_TOOLS, TOOLS_COLS,
@@ -351,13 +429,18 @@ static void mvdraw_init(void) {
 }
 
 static void mvdraw_refresh_menus_action(void) {
+    bool has_selection = canvas.selected >= 0 &&
+                         canvas.selected < drawing_count(&drawing);
+    int i;
+
     mv_menu_item_set_enabled(file_menu_items, FileMenuIndex_Save,
                              mv_document_is_dirty(&doc));
     mv_menu_item_set_enabled(edit_menu_items, EditMenuIndex_Undo,
                              mv_document_can_undo(&doc));
-    mv_menu_item_set_enabled(edit_menu_items, EditMenuIndex_Delete,
-                             canvas.selected >= 0 &&
-                             canvas.selected < drawing_count(&drawing));
+    mv_menu_item_set_enabled(edit_menu_items, EditMenuIndex_Delete, has_selection);
+    for (i = 0; i < ArrangeMenuIndex_Count; ++i) {
+        mv_menu_item_set_enabled(arrange_menu_items, i, has_selection);
+    }
 }
 
 int main(int argc, char **argv) {

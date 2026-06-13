@@ -168,3 +168,71 @@ void drawing_undo_reinsert(void *record) {
     d->shapes[e->index] = e->old;
     ++d->num_shapes;
 }
+
+
+/* Pull shapes[from] out and re-insert it at `to`, sliding the shapes between
+   them over by one. Caller guarantees both indices are valid and distinct. */
+static void shape_move_raw(Drawing *d, int from, int to) {
+    Shape moved = d->shapes[from];
+    if (to > from) {
+        for (int ii = from; ii < to; ++ii) {
+            d->shapes[ii] = d->shapes[ii + 1];
+        }
+    } else {
+        for (int ii = from; ii > to; --ii) {
+            d->shapes[ii] = d->shapes[ii - 1];
+        }
+    }
+    d->shapes[to] = moved;
+}
+
+
+/* A small ring of z-order moves backs the arrange undo items, sized like the
+   edit ring so entries never alias a still-live undo item. */
+typedef struct {
+    Drawing *drawing;
+    int from;
+    int to;
+} ShapeMove;
+
+static ShapeMove move_ring[DRAW_EDIT_RING];
+static int move_cursor;
+
+
+void *drawing_move_shape(Drawing *drawing, int from, int to) {
+    int n = drawing->num_shapes;
+    ShapeMove *m;
+
+    if ((from < 0) || (from >= n)) {
+        return (void *)0;
+    }
+    if (to < 0) {
+        to = 0;
+    }
+    if (to > n - 1) {
+        to = n - 1;
+    }
+    if (to == from) {
+        return (void *)0;
+    }
+
+    shape_move_raw(drawing, from, to);
+
+    m = &move_ring[move_cursor];
+    move_cursor = (move_cursor + 1) % DRAW_EDIT_RING;
+    m->drawing = drawing;
+    m->from = to;       /* inverse: move it back from `to` to `from` */
+    m->to = from;
+    return m;
+}
+
+
+void drawing_undo_move(void *record) {
+    ShapeMove *m = (ShapeMove *)record;
+    int n = m->drawing->num_shapes;
+    if ((m->from < 0) || (m->from >= n) ||
+        (m->to < 0) || (m->to >= n) || (m->from == m->to)) {
+        return;
+    }
+    shape_move_raw(m->drawing, m->from, m->to);
+}

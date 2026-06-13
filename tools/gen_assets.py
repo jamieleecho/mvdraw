@@ -90,14 +90,17 @@ def tool_frect():
     d.rectangle([4, 6, 19, 17], fill=BLACK)
     save_btn(img, "tool_frect.png")
 
+# Type-5 (640x192) pixels are ~2x taller than wide, so a pixel-square circle
+# reads as a tall oval. Draw the icon shapes ~2:1 (wide) so the circle looks
+# round on screen and the ellipse reads as a flatter wide oval.
 def tool_circle():
     img, d = new_btn()
-    d.ellipse([4, 4, 19, 19], outline=BLACK)
+    d.ellipse([2, 6, 21, 17], outline=BLACK)   # 20x12 px -> ~round on screen
     save_btn(img, "tool_circle.png")
 
 def tool_ellipse():
     img, d = new_btn()
-    d.ellipse([3, 7, 20, 16], outline=BLACK)
+    d.ellipse([1, 8, 22, 15], outline=BLACK)   # 22x8 px -> a wide oval on screen
     save_btn(img, "tool_ellipse.png")
 
 def tool_line():

@@ -1,4 +1,0 @@
-Hello from MVKit!
-
-This sample file lives at the root of the disk so the Open dialog
-(which filters on ".txt") has something to show.
