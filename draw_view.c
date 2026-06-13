@@ -5,7 +5,9 @@
 
 
 /* Selection-handle half-size and the pick tolerance (canvas pixels). */
+#define HANDLE_WHOLE  4
 #define HANDLE_HALF  2
+#define HANDLE_QUARTER  1
 #define PICK_TOL     4
 /* Hit-test margin around a shape's bounding box when selecting. */
 #define SHAPE_TOL    3
@@ -163,12 +165,12 @@ static int handle_points(const DrawView *v, const Shape *s, int *hx, int *hy) {
         return 4;
     } else if (s->type == SHAPE_CIRCLE) {
         int r = isqrt32((unsigned long)(x1 - x0) * (x1 - x0) +
-                     (unsigned long)(y1 - y0) * (y1 - y0));
+                     4 * (unsigned long)(y1 - y0) * (y1 - y0));
         int r2 = r / 2;
-        hx[0] = x0 - r; hy[0] = y0 - r2;   /* N */
-        hx[1] = x0 + r; hy[1] = y0 - r2;   /* E */
-        hx[2] = x0 + r; hy[2] = y0 + r2;   /* S */
-        hx[3] = x0 - r; hy[3] = y0 + r2;   /* W */
+        hx[0] = x0; hy[0] = y0 - r2;   /* N */
+        hx[1] = x0 + r; hy[1] = y0;    /* E */
+        hx[2] = x0; hy[2] = y0 + r2;   /* S */
+        hx[3] = x0 - r; hy[3] = y0;    /* W */
     } else {
         hx[0] = x0; hy[0] = y0;   /* TL */
         hx[1] = x1; hy[1] = y0;   /* TR */
@@ -179,22 +181,29 @@ static int handle_points(const DrawView *v, const Shape *s, int *hx, int *hy) {
 }
 
 static void draw_handle(const DrawView *v, int cx, int cy) {
-    _cgfx_lset(MV_OUTPATH, LOG_NONE);
-    _cgfx_fcolor(MV_OUTPATH, v->handle_color);
-    _cgfx_setdptr(MV_OUTPATH, cx - HANDLE_HALF, cy - HANDLE_HALF);
-    _cgfx_rbar(MV_OUTPATH, HANDLE_HALF * 2, HANDLE_HALF * 2);
+    cx = cx - HANDLE_HALF;
+    cy = cy - HANDLE_QUARTER;
+    clamp_to_canvas(v, &cx, &cy);
+    _cgfx_setdptr(MV_OUTPATH, cx, cy);
+    cx = cx + HANDLE_WHOLE;
+    cy = cy + HANDLE_HALF;
+    clamp_to_canvas(v, &cx, &cy);
+    _cgfx_bar(MV_OUTPATH, cx, cy);
 }
 
 static void draw_handles(const DrawView *v) {
     int hx[4], hy[4], i;
     const Shape *s = &v->drawing->shapes[v->selected];
     handle_points(v, s, hx, hy);
+    _cgfx_fcolor(MV_OUTPATH, v->handle_color);
+    _cgfx_lset(MV_OUTPATH, LOG_XOR);
     for (i = 0; i < 4; ++i) {
         if (s->type == SHAPE_LINE && (i == 1 || i == 2)) {
             continue;
         }
         draw_handle(v, hx[i], hy[i]);
     }
+    _cgfx_lset(MV_OUTPATH, LOG_NONE);
 }
 
 
@@ -379,6 +388,12 @@ static bool create_drag(DrawView *v, MSRET *mp, int ax, int ay) {
     Shape s;
     int idx;
 
+    if (v->selected) {
+        clip_to_canvas(v);
+        draw_handles(v);   /* erase existing handles if any */
+        clip_reset();
+    }
+
     track_drag(v, mp, type, ax, ay, &ex, &ey);
 
     s.type = (unsigned char)type;
@@ -432,6 +447,10 @@ static bool resize_drag(DrawView *v, MSRET *mp, int idx, int h) {
         /* anchor is the opposite endpoint (handle 0 <-> 3) */
         int other = (h == 0) ? 3 : 0;
         ax = hx[other]; ay = hy[other];
+    } else if (sp->type == SHAPE_CIRCLE) {
+        int r = circle_radius(sp);
+        ax = hx[0];
+        ay = hy[0] + r / 2;
     } else {
         /* anchor is the diagonally opposite corner: 0<->3, 1<->2 */
         int other = 3 - h;
@@ -586,7 +605,7 @@ void draw_view_init(DrawView *v, int x, int y, int width, int height,
     v->logic = LOG_NONE;
     v->paper = 1;            /* white paper */
     v->preview_color = 1;    /* XOR with a set bit so it toggles pixels */
-    v->handle_color = 0;     /* black handles on white paper */
+    v->handle_color = 1;     /* 1 due to xor */
     v->selected = -1;
     v->on_add = 0;
     v->on_edit = 0;
