@@ -27,8 +27,8 @@ top-level `Makefile` bootstraps everything (clones + builds `cmoc_os9`, installs
 the vendored MVKit) on the first run.
 
 ```sh
-./coco-dev make            # -> build/mvdraw.os9   (first run is slow)
-./coco-dev make clean
+./coco-dev make && make    # -> build/mvdraw.os9   (first run is slow)
+./coco-dev make real-clean
 ```
 
 `./coco-dev` opens an interactive shell; for non-interactive/CI use run docker

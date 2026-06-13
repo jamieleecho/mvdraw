@@ -26,7 +26,7 @@ MEM_SIZE     := 96
 CMOC_OS9_DIR := cmoc_os9
 BASEIMAGE    := disks/NOS9_6809_L2_v030300_coco3_80d.os9
 
-include mvkit/app.mk
+-include mvkit/app.mk
 
 # ---- bootstrap that app.mk leaves to the project ----------------------------
 CMOC_OS9_COMMIT := 14b8f6bc983a1c694d36e3890f34b16c06a2af20
@@ -34,7 +34,7 @@ CMOC_OS9_COMMIT := 14b8f6bc983a1c694d36e3890f34b16c06a2af20
 # Make the app binary wait for cmoc_os9's libc/libcgfx and an installed MVKit.
 # These are order-only so they don't force a relink on every rebuild; the
 # sub-makes themselves are incremental.
-$(BUILD)/$(APP): | libc libcgfx mvkit-install
+$(BUILD)/$(APP): | libc libcgfx mvkit
 
 # app.mk's AIF rule has no prerequisites, so a change to WIN_W/WIN_H/SCREEN_TYPE
 # would not regenerate it. Depend on this Makefile so those edits take effect.
@@ -55,11 +55,16 @@ libcgfx: | $(CMOC_OS9_DIR)
 	$(MAKE) -C $(CMOC_OS9_DIR)/cgfx all
 
 ## Build and install the vendored MVKit into cmoc's shared dir
-mvkit-install: | $(CMOC_OS9_DIR)
+mvkit:
+	rm -rf xmastree
+	git clone https://github.com/jamieleecho/xmastree.git
+	mv xmastree/$@ .
+	rm -rf xmastree
 	$(MAKE) -C mvkit install
 
 ## Remove build artifacts, the installed MVKit, and the cmoc_os9 checkout
 real-clean: clean
 	-$(MAKE) -C mvkit uninstall
 	-$(MAKE) -C mvkit clean
-	rm -rf $(CMOC_OS9_DIR)
+	rm -rf $(CMOC_OS9_DIR) mvkit xmastree
+
