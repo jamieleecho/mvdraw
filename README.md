@@ -50,6 +50,14 @@ make run                   # launches build/mvdraw.os9 in MAME (host, needs a di
 In the CoCo 3 window: after Multi-Vue loads, open the `/dd` drive and double-click
 the **mvdraw** icon.
 
+mvdraw behaves like a typical draw program with a point-and-click GUI. It also
+supports keyboard shortcuts:
+
+- **Tools** — `p` pointer, `b` box, `a` bar, `c` circle, `e` ellipse, `l` line
+- **Patterns** — `1`–`9`
+- **Undo** — `Ctrl-Z`
+- **Delete** selected object — `←`
+
 ## Regenerating art
 
 The icon and toolbar button PNGs are generated:
