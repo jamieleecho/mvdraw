@@ -388,7 +388,7 @@ static bool create_drag(DrawView *v, MSRET *mp, int ax, int ay) {
     Shape s;
     int idx;
 
-    if (v->selected) {
+    if (v->selected >= 0) {
         clip_to_canvas(v);
         draw_handles(v);   /* erase existing handles if any */
         clip_reset();
@@ -618,10 +618,6 @@ void draw_view_refresh(DrawView *v) {
 void draw_view_set_tool(DrawView *v, int tool) {
     bool was_select = (v->tool == TOOL_SELECT);
     v->tool = tool;
-    /* Repaint so handles appear/disappear as the Select tool toggles. */
-    if (was_select != (tool == TOOL_SELECT)) {
-        draw_view_draw(&v->view);
-    }
 }
 
 void draw_view_set_pattern(DrawView *v, unsigned char pattern) {

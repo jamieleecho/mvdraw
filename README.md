@@ -6,6 +6,8 @@ filled rectangles, circles, ellipses, and lines on a black-and-white canvas
 (screen type 5, 640×192), with image-grid toolbars for the shape tool, fill
 pattern, color, and logic-drawing mode.
 
+![mvdraw running under Multi-Vue](docs/mvdraw.png)
+
 ## Features
 
 - **Shape tools** (toolbar, top-left): Select, Rectangle, Filled-Rect, Circle,

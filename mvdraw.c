@@ -299,6 +299,9 @@ static void logic_selected(MVImageGrid *g) {
 static void canvas_on_add(DrawView *v, int index) {
     MVUndoItem item = { drawing_undo_remove_last, &drawing };
     mv_document_make_change(&doc, &item);
+    /* Return to the pointer tool after drawing a shape (updates the toolbar
+       highlight, which cascades to the canvas tool via tools_selected). */
+    mv_image_grid_select(&tools_grid, TOOL_SELECT);
 }
 
 static void canvas_on_edit(DrawView *v, int index, void *record) {
@@ -311,10 +314,23 @@ static void canvas_on_edit(DrawView *v, int index, void *record) {
 
 static void handle_key_event(MVUiEvent *event) {
     char c = event->info.key.character;
-    if (c >= '1' && c <= '6') {
-        mv_image_grid_select(&tools_grid, c - '1');
+    int tool = -1;
+    switch (c) {
+        case 'b': case 'B': tool = TOOL_RECT;    break;   /* box (outline rect) */
+        case 'a': case 'A': tool = TOOL_FRECT;   break;   /* bar (filled rect)  */
+        case 'c': case 'C': tool = TOOL_CIRCLE;  break;
+        case 'e': case 'E': tool = TOOL_ELLIPSE; break;
+        case 'l': case 'L': tool = TOOL_LINE;    break;
+        case 'p': case 'P': tool = TOOL_SELECT;  break;
+    }
+    if (tool >= 0) {
+        mv_image_grid_select(&tools_grid, tool);
+    } else if (c >= '1' && c <= '9') {
+        mv_image_grid_select(&patterns_grid, c - '1');
     } else if (c == '\x1A') {            /* Ctrl-Z */
         undo_action((MSRET *)NULL, -1, -1);
+    } else if (c == '\b') { /* Delete or Backspace */
+        delete_action((MSRET *)NULL, -1, -1);
     }
 }
 
